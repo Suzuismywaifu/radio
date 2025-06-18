@@ -66,6 +66,9 @@ function initializeAudio() {
 function drawVisualizer(analyser, dataArray, bufferLength) {
     requestAnimationFrame(() => drawVisualizer(analyser, dataArray, bufferLength));
 
+    // THIS LINE WAS MISSING AND IS CRUCIAL FOR THE VISUALIZER TO WORK
+    analyser.getByteFrequencyData(dataArray);
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const barWidth = (canvas.width / bufferLength) * 1.5;
