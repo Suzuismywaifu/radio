@@ -43,13 +43,14 @@ function initializeAudio() {
     if (isInitialized) return;
     
     // Create AudioContext after a user gesture (the first click)
+    // Use webkitAudioContext for Safari compatibility
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioContext.createAnalyser();
     
     // Link the audio element to the analyser
     source = audioContext.createMediaElementSource(audio);
     source.connect(analyser);
-    analyser.connect(audioContext.destination);
+    analyser.connect(audioContext.destination); // Connect analyser to speakers
     
     // Configure analyser
     analyser.fftSize = 256;
@@ -58,7 +59,7 @@ function initializeAudio() {
     
     isInitialized = true;
     
-    // Start the visualizer drawing loop
+    // Start the visualizer drawing loop, passing analyser and data array
     drawVisualizer(analyser, dataArray, bufferLength);
 }
 
@@ -66,7 +67,7 @@ function initializeAudio() {
 function drawVisualizer(analyser, dataArray, bufferLength) {
     requestAnimationFrame(() => drawVisualizer(analyser, dataArray, bufferLength));
 
-    // THIS LINE WAS MISSING AND IS CRUCIAL FOR THE VISUALIZER TO WORK
+    // Get the frequency data and populate dataArray
     analyser.getByteFrequencyData(dataArray);
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -90,23 +91,32 @@ function drawVisualizer(analyser, dataArray, bufferLength) {
 }
 
 // --- Event Listeners ---
-playPauseBtn.addEventListener('click', () => {
-    // Initialize audio on the first click
+// Make playPauseBtn click listener asynchronous for better AudioContext management
+playPauseBtn.addEventListener('click', async () => {
+    // Initialize audio context if it hasn't been yet
     if (!isInitialized) {
         initializeAudio();
     }
     
-    // Resume AudioContext if it was suspended
+    // Always attempt to resume AudioContext if it's suspended (common in WebKit/iOS)
     if (audioContext.state === 'suspended') {
-        audioContext.resume();
+        try {
+            await audioContext.resume();
+            console.log('AudioContext resumed successfully.');
+        } catch (e) {
+            console.error('Failed to resume AudioContext:', e);
+            // Optionally, alert the user that audio cannot be played
+            return; // Stop execution if context cannot resume
+        }
     }
     
-    // Toggle play/pause
+    // Toggle play/pause only after AudioContext is running
     if (isPlaying) {
         audio.pause();
         playPauseIcon.classList.remove('fa-pause');
         playPauseIcon.classList.add('fa-play');
     } else {
+        // Use .catch to handle potential playback errors (e.g., if stream is unavailable)
         audio.play().catch(e => console.error("Error playing audio:", e));
         playPauseIcon.classList.remove('fa-play');
         playPauseIcon.classList.add('fa-pause');
@@ -339,7 +349,6 @@ resetWallpaperBtn.addEventListener('click', () => {
     wallpaperUrlInput.value = ''; // Clear URL input
 
     // Reset to the original image and re-analyze its brightness. Pass `false` to not save to localStorage.
-    // IMPORTANT FIX: Ensure we pass only the url() string to applyWallpaperAndAnalyze's first argument
     applyWallpaperAndAnalyze(`url('${DEFAULT_BACKGROUND_IMAGE_URL}')`, DEFAULT_BACKGROUND_IMAGE_URL, false);
 });
 
@@ -352,7 +361,6 @@ document.addEventListener('DOMContentLoaded', () => {
         applyWallpaperAndAnalyze(`url('${savedWallpaperUrl}')`, savedWallpaperUrl);
     } else {
         // If no wallpaper saved, apply default without saving it again
-        // IMPORTANT FIX: Ensure we pass only the url() string to applyWallpaperAndAnalyze's first argument
         applyWallpaperAndAnalyze(`url('${DEFAULT_BACKGROUND_IMAGE_URL}')`, DEFAULT_BACKGROUND_IMAGE_URL, false);
     }
 
