@@ -1,350 +1,364 @@
-// Get references to HTML elements
-const audioPlayer = document.getElementById('audioPlayer');
-const playPauseButton = document.getElementById('playPauseButton');
-const playIcon = document.getElementById('playIcon');
-const pauseIcon = document.getElementById('pauseIcon');
+// /js/script.js
+// --- DOM Elements ---
+const playPauseBtn = document.getElementById('playPauseBtn');
+const playPauseIcon = playPauseBtn.querySelector('i');
 const volumeSlider = document.getElementById('volumeSlider');
-const playerStatus = document.getElementById('playerStatus');
-const progressFill = document.getElementById('progressFill');
-const errorMessage = document.getElementById('errorMessage');
-const volumeValue = document.getElementById('volumeValue');
+const audio = document.getElementById('radioStream');
 
-// New elements for the hamburger menu and background settings
-const hamburgerButton = document.getElementById('hamburgerButton');
-const hamburgerIcon = document.getElementById('hamburgerIcon');
-const sideMenu = document.getElementById('sideMenu');
-const closeMenuButton = document.getElementById('closeMenuButton');
-const imageUrlInput = document.getElementById('imageUrlInput');
-const imageFileInput = document.getElementById('imageFileInput');
-const applyBgButton = document.getElementById('applyBgButton');
-const clearBgButton = document.getElementById('clearBgButton');
-const overlay = document.getElementById('overlay');
-const body = document.body;
+// New: References to Volume Icons
+const volumeDownIcon = document.getElementById('volumeDownIcon');
+const volumeUpIcon = document.getElementById('volumeUpIcon');
 
-const fileErrorMessage = document.getElementById('fileErrorMessage');
+// Menu elements
+const menuToggle = document.getElementById('menuToggle');
+const sidebarMenu = document.getElementById('sidebarMenu');
 
-// New elements for mute functionality
-const muteToggleButton = document.getElementById('muteToggleButton');
-const volumeIcon = document.getElementById('volumeIcon');
-const muteIcon = document.getElementById('muteIcon');
+// Wallpaper change elements
+const wallpaperFileInput = document.getElementById('wallpaperFileInput');
+const wallpaperUrlInput = document.getElementById('wallpaperUrlInput');
+const applyWallpaperUrlBtn = document.getElementById('applyWallpaperUrlBtn');
+const resetWallpaperBtn = document.getElementById('resetWallpaperBtn');
+const body = document.body; // Reference to the body element
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
-let previousVolume = 0.5; // Store previous volume for mute/unmute - DEFAULT TO 50%
+// --- Web Audio API Setup ---
+let audioContext;
+let analyser;
+let source;
+let isPlaying = false;
+let isInitialized = false;
 
-// Set initial volume from slider and update display
-audioPlayer.volume = volumeSlider.value;
-volumeValue.textContent = `${Math.round(audioPlayer.volume * 100)}%`;
+// Variable to store previous volume before muting
+let previousVolume = 0.5; // Default to 0.5 if no previous volume is set
 
-// Function to update the play/pause button state
-function updatePlayPauseButton() {
-    if (audioPlayer.paused) {
-        playIcon.classList.remove('hidden');
-        pauseIcon.classList.add('hidden');
+// Set initial volume for the audio element (will be overridden by persisted value if any)
+audio.volume = 0.5;
+
+// --- Canvas Visualizer Setup ---
+const canvas = document.getElementById('visualizer');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+function initializeAudio() {
+    if (isInitialized) return;
+    
+    // Create AudioContext after a user gesture (the first click)
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    
+    // Link the audio element to the analyser
+    source = audioContext.createMediaElementSource(audio);
+    source.connect(analyser);
+    analyser.connect(audioContext.destination);
+    
+    // Configure analyser
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    isInitialized = true;
+    
+    // Start the visualizer drawing loop
+    drawVisualizer(analyser, dataArray, bufferLength);
+}
+
+// --- Main Drawing Function ---
+function drawVisualizer(analyser, dataArray, bufferLength) {
+    requestAnimationFrame(() => drawVisualizer(analyser, dataArray, bufferLength));
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const barWidth = (canvas.width / bufferLength) * 1.5;
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * canvas.height * 0.6;
+
+        // Create a gradient for the bars
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
+        gradient.addColorStop(0, 'rgba(100, 100, 255, 0.4)'); // Base color
+        gradient.addColorStop(1, 'rgba(255, 100, 200, 0.7)'); // Tip color
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+        x += barWidth + 2; // Add 2 for spacing between bars
+    }
+}
+
+// --- Event Listeners ---
+playPauseBtn.addEventListener('click', () => {
+    // Initialize audio on the first click
+    if (!isInitialized) {
+        initializeAudio();
+    }
+    
+    // Resume AudioContext if it was suspended
+    if (audioContext.state === 'suspended') {
+        audioContext.resume();
+    }
+    
+    // Toggle play/pause
+    if (isPlaying) {
+        audio.pause();
+        playPauseIcon.classList.remove('fa-pause');
+        playPauseIcon.classList.add('fa-play');
     } else {
-        playIcon.classList.add('hidden');
-        pauseIcon.classList.remove('hidden');
+        audio.play().catch(e => console.error("Error playing audio:", e));
+        playPauseIcon.classList.remove('fa-play');
+        playPauseIcon.classList.add('fa-pause');
+    }
+    isPlaying = !isPlaying;
+});
+
+/**
+ * Updates the volume icons based on the current volume/muted state.
+ */
+function updateVolumeIcons() {
+    // Remove all specific volume icons first to ensure clean state
+    volumeDownIcon.classList.remove('fa-volume-xmark', 'fa-volume-down', 'fa-volume-off');
+    volumeUpIcon.classList.remove('fa-volume-xmark', 'fa-volume-up', 'fa-volume-off');
+
+    if (audio.muted || audio.volume === 0) {
+        volumeDownIcon.classList.add('fa-volume-xmark'); // Muted icon
+        volumeUpIcon.classList.add('fa-volume-xmark');   // Muted icon
+    } else if (audio.volume > 0 && audio.volume <= 0.5) {
+        volumeDownIcon.classList.add('fa-volume-down'); // Low/Mid volume icon
+        volumeUpIcon.classList.add('fa-volume-up');
+    } else { // audio.volume > 0.5
+        volumeDownIcon.classList.add('fa-volume-down');
+        volumeUpIcon.classList.add('fa-volume-up'); // High volume icon
     }
 }
 
-// Function to update the mute button and volume slider state
-function updateMuteButton() {
-    if (audioPlayer.muted) {
-        volumeIcon.classList.add('hidden');
-        muteIcon.classList.remove('hidden');
-        volumeSlider.value = 0; // Set slider to 0 when muted
-        volumeSlider.disabled = true; // Disable slider when muted
-        volumeValue.textContent = 'Muted';
-        muteToggleButton.setAttribute('aria-label', 'Unmute audio');
+
+// Volume Slider Event Listener
+volumeSlider.addEventListener('input', (e) => {
+    const newVolume = parseFloat(e.target.value);
+    audio.volume = newVolume;
+
+    if (newVolume > 0) {
+        audio.muted = false;
+        previousVolume = newVolume; // Store this as the last non-zero volume
+    } else { // newVolume === 0
+        audio.muted = true;
+    }
+    updateVolumeIcons(); // Update icons after volume change
+});
+
+// Click handlers for volume icons to toggle mute
+function toggleMute() {
+    if (audio.muted) {
+        // Was muted, unmute
+        audio.muted = false;
+        // Restore previous volume, or default to 0.5 if previous was 0 (or not set)
+        audio.volume = previousVolume > 0 ? previousVolume : 0.5; 
+        volumeSlider.value = audio.volume; // Update slider position
     } else {
-        volumeIcon.classList.remove('hidden');
-        muteIcon.classList.add('hidden');
-        volumeSlider.value = audioPlayer.volume > 0 ? audioPlayer.volume : previousVolume; // Restore actual volume or last non-zero volume
-        volumeSlider.disabled = false; // Enable slider when unmuted
-        volumeValue.textContent = `${Math.round(audioPlayer.volume * 100)}%`;
-        muteToggleButton.setAttribute('aria-label', 'Mute audio');
+        // Was unmuted, mute
+        previousVolume = audio.volume; // Store current volume before muting
+        audio.muted = true;
+        audio.volume = 0;
+        volumeSlider.value = 0; // Move slider to 0
     }
+    updateVolumeIcons(); // Update icons after mute toggle
 }
 
-// Function to display messages in the UI (unified)
-function showMessage(element, message, type = 'info') {
-    element.textContent = message;
-    element.classList.remove('hidden', 'error', 'info'); // Clear previous types
-    element.classList.add(type);
-    element.style.display = 'block'; // Make it visible
-}
+volumeDownIcon.addEventListener('click', toggleMute);
+volumeUpIcon.addEventListener('click', toggleMute);
 
-// Function to hide messages (unified)
-function hideMessage(element) {
-    element.classList.remove('error', 'info');
-    element.style.display = 'none'; // Hide it
-    element.textContent = ''; // Clear text
-}
 
-// Function to update apply button state
-function updateApplyButtonState() {
-    const hasImageUrl = imageUrlInput.value.trim() !== '';
-    const hasFile = imageFileInput.files.length > 0;
-    const isDisabled = !(hasImageUrl || hasFile);
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
 
-    applyBgButton.disabled = isDisabled;
-    applyBgButton.setAttribute('aria-disabled', isDisabled);
-
-    if (isDisabled) {
-        applyBgButton.classList.add('opacity-50', 'cursor-not-allowed');
+// --- Sidebar Menu Functionality ---
+menuToggle.addEventListener('click', () => {
+    sidebarMenu.classList.toggle('active'); // Toggle the 'active' class
+    const icon = menuToggle.querySelector('i');
+    if (sidebarMenu.classList.contains('active')) {
+        icon.classList.remove('fa-bars');
+        icon.classList.add('fa-times'); // Change to 'X' icon
     } else {
-        applyBgButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        icon.classList.remove('fa-times');
+        icon.classList.add('fa-bars'); // Change back to hamburger icon
     }
-}
+});
 
-// Event Listener for Play/Pause Button
-playPauseButton.addEventListener('click', () => {
-    if (audioPlayer.paused) {
-        audioPlayer.play().catch(error => {
-            console.error('Error playing audio:', error);
-            showMessage(errorMessage, `Failed to play stream: ${error.message}. Please ensure your browser allows autoplay or try again.`, 'error');
-        });
+// Close sidebar if clicking outside (now also toggles icon back)
+document.addEventListener('click', (event) => {
+    if (sidebarMenu.classList.contains('active') && !sidebarMenu.contains(event.target) && !menuToggle.contains(event.target)) {
+        sidebarMenu.classList.remove('active');
+        // Make sure to change the icon back if closed by clicking outside
+        const icon = menuToggle.querySelector('i');
+        icon.classList.remove('fa-times');
+        icon.classList.add('fa-bars');
+    }
+});
+
+
+// --- Wallpaper Change and Dynamic Color Functionality ---
+// Default background image from CSS :root variable (ensure it's defined there)
+// This will contain the full CSS value, e.g., 'url("...") no-repeat center center'
+const DEFAULT_BACKGROUND_IMAGE_CSS_VALUE = getComputedStyle(document.documentElement).getPropertyValue('--default-bg-image').trim();
+// Extract just the URL part for analysis and for setting backgroundImage property
+const DEFAULT_BACKGROUND_IMAGE_URL = DEFAULT_BACKGROUND_IMAGE_CSS_VALUE.replace(/url\(['"]?(.*?)['"]?\).*$/, '$1');
+
+const BRIGHTNESS_THRESHOLD = 128; // Value between 0-255. Adjust as needed.
+const LAST_WALLPAPER_KEY = 'lastWallpaper'; // Key for localStorage
+
+/**
+ * Sets the player UI theme based on background brightness.
+ * Adds 'light-theme-active' class to body if background is light, otherwise removes it.
+ * @param {boolean} isLightBackground True if the background image is considered light.
+ */
+function setPlayerTheme(isLightBackground) {
+    if (isLightBackground) {
+        body.classList.add('light-theme-active');
     } else {
-        audioPlayer.pause();
-    }
-});
-
-// Event Listener for Volume Slider
-volumeSlider.addEventListener('input', () => {
-    audioPlayer.volume = volumeSlider.value;
-    // If slider moves from 0, unmute
-    if (audioPlayer.muted && audioPlayer.volume > 0) {
-        audioPlayer.muted = false;
-    }
-    // Store previous volume only if not muted and volume is greater than 0
-    if (!audioPlayer.muted && audioPlayer.volume > 0) {
-        previousVolume = audioPlayer.volume;
-    }
-    updateMuteButton(); // Update mute icon/text based on current volume/mute state
-});
-
-// Event Listener for Mute/Unmute Button
-muteToggleButton.addEventListener('click', () => {
-    if (audioPlayer.muted) {
-        audioPlayer.muted = false;
-        // Restore previous volume, but ensure it's not 0 unless it was intentionally 0 before muting
-        audioPlayer.volume = previousVolume > 0 ? previousVolume : 0.5; // Restore previous volume or default (50%)
-    } else {
-        previousVolume = audioPlayer.volume; // Save current volume before muting
-        audioPlayer.muted = true;
-    }
-    updateMuteButton();
-});
-
-
-// Audio Player Event Listeners
-audioPlayer.addEventListener('play', () => {
-    updatePlayPauseButton();
-    hideMessage(errorMessage); // Hide general error message
-});
-
-audioPlayer.addEventListener('playing', () => {
-    playerStatus.classList.add('hidden'); // Hide status text when actually playing
-});
-
-audioPlayer.addEventListener('pause', () => {
-    updatePlayPauseButton();
-    playerStatus.textContent = 'Paused';
-    playerStatus.classList.remove('hidden'); // Show status text when paused
-    progressFill.style.width = '0%';
-});
-
-audioPlayer.addEventListener('volumechange', () => {
-    localStorage.setItem('playerVolume', audioPlayer.volume); // Save volume
-    localStorage.setItem('playerMuted', audioPlayer.muted); // Save mute state
-    updateMuteButton(); // Ensure mute icon/slider reflects actual volume/mute state
-});
-
-audioPlayer.addEventListener('waiting', () => {
-    playerStatus.textContent = 'Buffering...';
-    playerStatus.classList.remove('hidden'); // Show status text when buffering
-});
-
-audioPlayer.addEventListener('error', (e) => {
-    console.error('Audio error:', e);
-    let message = 'An unknown audio error occurred.';
-    switch (e.target.error.code) {
-        case e.target.error.MEDIA_ERR_ABORTED:
-            message = 'Audio playback aborted. You stopped the audio.';
-            break;
-        case e.target.error.MEDIA_ERR_NETWORK:
-            message = 'A network error caused the audio download to fail. Check your internet connection.';
-            break;
-        case e.target.error.MEDIA_ERR_DECODE:
-            message = 'The audio playback was aborted due to a decoding error. The file might be corrupted or in an unsupported format.';
-            break;
-        case e.target.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
-            message = 'The audio format is not supported or the stream URL is invalid. Try a different stream or refresh.';
-            break;
-        default:
-            message = 'An unexpected audio error occurred. Please try reloading the page.';
-    }
-    playerStatus.textContent = 'Error!';
-    playerStatus.classList.remove('hidden'); // Show status text on error
-    showMessage(errorMessage, `Error: ${message}`, 'error');
-    updatePlayPauseButton();
-    progressFill.style.width = '0%';
-});
-
-audioPlayer.addEventListener('canplay', () => {
-    playerStatus.textContent = 'Ready to play';
-    playerStatus.classList.remove('hidden'); // Show status text when ready
-    hideMessage(errorMessage);
-});
-
-audioPlayer.addEventListener('loadstart', () => {
-    playerStatus.textContent = 'Loading...';
-    playerStatus.classList.remove('hidden'); // Show status text when loading
-    hideMessage(errorMessage);
-    progressFill.style.width = '0%';
-});
-
-// Hamburger Menu and Background Settings Logic
-function toggleMenu() {
-    sideMenu.classList.toggle('open');
-    hamburgerIcon.classList.toggle('active');
-    overlay.classList.toggle('active');
-}
-
-function applyBackground(source, type) {
-    if (source) {
-        body.style.backgroundImage = `url('${source}')`;
-        body.style.backgroundSize = 'cover';
-        body.style.backgroundPosition = 'center';
-        body.style.backgroundRepeat = 'no-repeat';
-        body.style.backgroundAttachment = 'fixed';
-        body.classList.add('has-bg-image'); // Add class to body
-        localStorage.setItem('savedBackground', source);
-        localStorage.setItem('backgroundType', type);
+        body.classList.remove('light-theme-active');
     }
 }
 
-function clearBackground() {
-    body.style.backgroundImage = 'none';
-    body.style.background = 'linear-gradient(135deg, var(--gray-light), var(--gray-dark))';
-    body.classList.remove('has-bg-image'); // Remove class from body
-    localStorage.removeItem('savedBackground');
-    localStorage.removeItem('backgroundType');
-}
+/**
+ * Analyzes the brightness of an image from a given URL.
+ * @param {string} imageUrl The URL of the image (can be data:URL or http/https URL).
+ * @param {function(boolean): void} callback Function to call with true (light) or false (dark).
+ */
+function analyzeImageBrightness(imageUrl, callback) {
+    const img = new Image();
+    img.crossOrigin = "Anonymous"; // Crucial for CORS to read pixel data from external URLs
+    img.src = imageUrl;
 
-function loadSavedBackground() {
-    const savedBackground = localStorage.getItem('savedBackground');
-    const backgroundType = localStorage.getItem('backgroundType');
-    if (savedBackground && (backgroundType === 'url' || backgroundType === 'data')) {
-        body.style.backgroundImage = `url('${savedBackground}')`;
-        body.style.backgroundSize = 'cover';
-        body.style.backgroundPosition = 'center';
-        body.style.backgroundRepeat = 'no-repeat';
-        body.style.backgroundAttachment = 'fixed';
-        body.classList.add('has-bg-image'); // Ensure class is added on load
-    }
-}
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        context.drawImage(img, 0, 0, img.width, img.height);
 
-// Event listeners for menu
-hamburgerButton.addEventListener('click', toggleMenu);
-closeMenuButton.addEventListener('click', toggleMenu);
-overlay.addEventListener('click', toggleMenu);
+        try {
+            const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            let sumBrightness = 0;
 
-// Event listener for file input change
-imageFileInput.addEventListener('change', () => {
-    if (imageFileInput.files.length > 0) {
-        const file = imageFileInput.files[0];
-        if (file.size > MAX_FILE_SIZE) {
-            showMessage(fileErrorMessage, `File is too large! Please select an image smaller than ${MAX_FILE_SIZE / (1024 * 1024)}MB.`, 'error');
-            imageFileInput.value = ''; // Clear the selected file
-        } else {
-            hideMessage(fileErrorMessage);
+            for (let i = 0; i < data.length; i += 4) {
+                // Calculate perceived brightness using a common formula
+                const brightness = (0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+                sumBrightness += brightness;
+            }
+
+            const averageBrightness = sumBrightness / (data.length / 4);
+            const isLight = averageBrightness > BRIGHTNESS_THRESHOLD;
+            callback(isLight);
+        } catch (e) {
+            console.warn("Could not read image data (likely CORS issue or security error for local file):", e);
+            // Fallback: Assume dark background if cannot analyze (defaulting to light UI)
+            callback(false);
         }
-        imageUrlInput.value = ''; // Clear URL input if a file is selected
+    };
+
+    img.onerror = () => {
+        console.error("Failed to load image for brightness analysis:", imageUrl);
+        // Fallback: Assume dark background if image fails to load (defaulting to light UI)
+        callback(false);
+    };
+}
+
+/**
+ * Applies a new wallpaper, analyzes its brightness, and saves to local storage.
+ * @param {string} newBackgroundImageUrlCss The CSS background-image url() string (e.g., 'url("...")').
+ * @param {string} imageUrlForAnalysis The direct URL of the image for analysis (can be data:URL).
+ * @param {boolean} [shouldSave=true] Optional: Whether to save the wallpaper to local storage. Defaults to true.
+ */
+function applyWallpaperAndAnalyze(newBackgroundImageUrlCss, imageUrlForAnalysis, shouldSave = true) {
+    body.style.backgroundImage = newBackgroundImageUrlCss;
+    body.style.backgroundSize = 'cover';
+    body.style.backgroundRepeat = 'no-repeat';
+    body.style.backgroundPosition = 'center center';
+    
+    // Save the image URL/data URL to localStorage for persistence
+    if (shouldSave) {
+        localStorage.setItem(LAST_WALLPAPER_KEY, imageUrlForAnalysis);
     } else {
-        hideMessage(fileErrorMessage);
+        localStorage.removeItem(LAST_WALLPAPER_KEY); // Clear if not saving
     }
-    updateApplyButtonState();
-});
 
-// Event listener for URL input change (to clear file input if URL is entered)
-imageUrlInput.addEventListener('input', () => {
-    if (imageUrlInput.value.trim() !== '') {
-        imageFileInput.value = ''; // Clear file input if URL is being typed
-        hideMessage(fileErrorMessage); // Hide any file size error
-    }
-    updateApplyButtonState();
-});
+    // Analyze the brightness of the new image
+    analyzeImageBrightness(imageUrlForAnalysis, (isLight) => {
+        setPlayerTheme(isLight);
+    });
 
-// NEW: Event listener for Enter key on imageUrlInput
-imageUrlInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-        event.preventDefault(); // Prevent default form submission if any
-        if (!applyBgButton.disabled) { // Only click if the button is enabled
-            applyBgButton.click();
-        }
-    }
-});
+    sidebarMenu.classList.remove('active'); // Close menu after selection
+    menuToggle.querySelector('i').classList.replace('fa-times', 'fa-bars'); // Reset icon
+}
 
 
-// Event listeners for background settings
-applyBgButton.addEventListener('click', () => {
-    const imageUrl = imageUrlInput.value.trim();
-    if (imageUrl) {
-        applyBackground(imageUrl, 'url');
-        imageUrlInput.value = ''; // Clear input after applying
-    } else if (imageFileInput.files.length > 0) {
-        const file = imageFileInput.files[0];
-        if (file.size > MAX_FILE_SIZE) {
-            showMessage(fileErrorMessage, `File is too large! Please select an image smaller than ${MAX_FILE_SIZE / (1024 * 1024)}MB.`, 'error');
-            return;
-        }
+// Local file upload
+wallpaperFileInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
         const reader = new FileReader();
         reader.onload = (e) => {
-            applyBackground(e.target.result, 'data');
-            imageFileInput.value = ''; // Clear file input
-            hideMessage(fileErrorMessage);
-        };
-        reader.onerror = (error) => {
-            console.error('Error reading file:', error);
-            showMessage(fileErrorMessage, `Error reading file: ${error.message}.`, 'error');
+            const dataUrl = e.target.result;
+            // For local files, the data URL is used for both background and analysis
+            applyWallpaperAndAnalyze(`url('${dataUrl}')`, dataUrl);
         };
         reader.readAsDataURL(file);
     }
-    updateApplyButtonState(); // Update state after applying
 });
 
-clearBgButton.addEventListener('click', clearBackground);
+// URL input
+applyWallpaperUrlBtn.addEventListener('click', () => {
+    const imageUrl = wallpaperUrlInput.value.trim();
+    if (imageUrl) {
+        // First, clear the file input field, as we're using a URL
+        wallpaperFileInput.value = ''; 
 
-// Initialize button state and load saved background on page load
+        const testImg = new Image();
+        testImg.src = imageUrl;
+        testImg.onload = () => {
+            applyWallpaperAndAnalyze(`url('${imageUrl}')`, imageUrl);
+        };
+        testImg.onerror = () => {
+            alert('Invalid image URL or unable to load image. Please check the URL.');
+        };
+    } else {
+        alert('Please enter an image URL.');
+    }
+});
+
+// Reset to default wallpaper
+resetWallpaperBtn.addEventListener('click', () => {
+    // Clear input fields
+    wallpaperFileInput.value = ''; // Clear file input
+    wallpaperUrlInput.value = ''; // Clear URL input
+
+    // Reset to the original image and re-analyze its brightness. Pass `false` to not save to localStorage.
+    // IMPORTANT FIX: Ensure we pass only the url() string to applyWallpaperAndAnalyze's first argument
+    applyWallpaperAndAnalyze(`url('${DEFAULT_BACKGROUND_IMAGE_URL}')`, DEFAULT_BACKGROUND_IMAGE_URL, false);
+});
+
+
+// --- Initial Setup on Page Load ---
 document.addEventListener('DOMContentLoaded', () => {
-    updatePlayPauseButton();
-    // Initial player status: "Ready to load" and visible
-    playerStatus.textContent = 'Ready to load';
-    playerStatus.classList.remove('hidden');
-
-    // Set initial volume from local storage or default (50%)
-    const savedVolume = localStorage.getItem('playerVolume');
-    if (savedVolume !== null) {
-        audioPlayer.volume = parseFloat(savedVolume);
-        volumeSlider.value = parseFloat(savedVolume);
-        previousVolume = parseFloat(savedVolume); // Set previous volume for mute/unmute
+    // 1. Load Last Wallpaper (if any) and set theme
+    const savedWallpaperUrl = localStorage.getItem(LAST_WALLPAPER_KEY);
+    if (savedWallpaperUrl) {
+        applyWallpaperAndAnalyze(`url('${savedWallpaperUrl}')`, savedWallpaperUrl);
     } else {
-        audioPlayer.volume = 0.5; // Default volume set to 50%
-        volumeSlider.value = 0.5; // Default volume slider set to 50%
-        previousVolume = 0.5;
+        // If no wallpaper saved, apply default without saving it again
+        // IMPORTANT FIX: Ensure we pass only the url() string to applyWallpaperAndAnalyze's first argument
+        applyWallpaperAndAnalyze(`url('${DEFAULT_BACKGROUND_IMAGE_URL}')`, DEFAULT_BACKGROUND_IMAGE_URL, false);
     }
 
-    // Check for initial mute state
-    const savedMuteState = localStorage.getItem('playerMuted');
-    if (savedMuteState === 'true') {
-        audioPlayer.muted = true;
-    } else {
-        audioPlayer.muted = false;
-    }
-    updateMuteButton(); // Update mute button/slider based on initial state
+    // 2. Set initial volume from slider (0.5 or persisted value)
+    // IMPORTANT: Make sure the audio element's volume is set before updating slider/icons
+    // If you persist volume, load it here. For now, it defaults to 0.5 from HTML or initial previousVolume.
+    audio.volume = parseFloat(volumeSlider.value); // Use the value from HTML or previous script set
+    previousVolume = audio.volume; // Store initial volume
 
-    loadSavedBackground();
-    hideMessage(fileErrorMessage); // Ensure file error message is hidden on load
-    hideMessage(errorMessage); // Ensure main error message is hidden on load
-    updateApplyButtonState(); // Set initial disabled state for apply button
+    // 3. Update volume icon initially
+    updateVolumeIcons(); // Call this once on load to set correct icon
 });
