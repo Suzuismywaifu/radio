@@ -1,191 +1,371 @@
-/* Custom font import for Inter */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-
-/* Define CSS Variables for colors */
+/* /css/style.css */
+/* --- Basic Setup & Background --- */
 :root {
-    --primary-indigo-600: #4f46e5;
-    --primary-indigo-700: #4338ca;
-    --primary-indigo-500: #6366f1;
-    --secondary-red-500: #ef4444;
-    --secondary-red-600: #dc2626;
-    --gray-light: #f0f4f8;
-    --gray-dark: #d9e2ec;
+    --bar-color: rgba(255, 255, 255, 0.7);
+    --glass-bg: rgba(255, 255, 255, 0.3);
+    --glass-border: rgba(255, 255, 255, 0.2);
+    --glass-shadow: rgba(0, 0, 0, 0.3);
+    --blur-amount: 20px;
+    --default-bg-image: url('https://images.unsplash.com/photo-1511447333015-45b65e60f6d5?q=80&w=2155&auto=format&fit=crop') no-repeat center center;
+
+    /* Player UI Colors (Default to light UI for dark backgrounds) */
+    --player-text-color: #fff;
+    --player-subtext-opacity: 0.8;
+    --player-button-bg: rgba(255, 255, 255, 0.9);
+    --player-button-text: #333;
+    --volume-slider-thumb: #fff;
+    --volume-slider-track: rgba(0, 0, 0, 0.2);
+    --station-logo-border: rgba(255, 255, 255, 0.5);
+    
+    /* New: Placeholder text color variable */
+    --input-placeholder-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Theme for when the background is light (activates darker UI elements) */
+body.light-theme-active {
+    --player-text-color: #333; /* Darker text */
+    --player-subtext-opacity: 0.7; /* Slightly less opaque */
+    --player-button-bg: rgba(0, 0, 0, 0.7); /* Darker button background */
+    --player-button-text: #fff; /* Lighter button icon */
+    --volume-slider-thumb: #333;
+    --volume-slider-track: rgba(255, 255, 255, 0.3);
+    --station-logo-border: rgba(0, 0, 0, 0.3);
+
+    /* New: Placeholder text color for light theme */
+    --input-placeholder-color: rgba(51, 51, 51, 0.6); /* Darker, slightly transparent */
+}
+
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden; /* Important for preventing scrollbar when sidebar is open */
+    font-family: 'Poppins', sans-serif;
 }
 
 body {
-    font-family: 'Inter', sans-serif;
-    background: linear-gradient(135deg, var(--gray-light), var(--gray-dark)); /* Soft gradient background default */
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 100vh;
-    margin: 0;
+    background: var(--default-bg-image); /* Use CSS variable for default */
+    background-size: cover;
+    color: var(--player-text-color); /* Use variable for body text */
+    transition: background-image 0.5s ease-in-out, color 0.3s ease; /* Smooth transition for background and text changes */
+}
+
+/* --- Spectrum Analyzer Canvas --- */
+#visualizer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Behind the player */
+}
+
+/* --- Hamburger Menu Button --- */
+.menu-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 100; /* Above everything else */
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: none;
+    background: var(--glass-bg);
+    backdrop-filter: blur(calc(var(--blur-amount) / 2)); /* Slightly less blur than main container */
+    -webkit-backdrop-filter: blur(calc(var(--blur-amount) / 2));
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 4px 15px var(--glass-shadow);
+    color: var(--player-text-color); /* Use variable for icon color */
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.menu-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+}
+
+/* --- Off-canvas Sidebar Menu --- */
+.sidebar-menu {
+    position: fixed;
+    top: 0;
+    right: -300px; /* Hidden off-screen by default */
+    width: 280px;
+    height: 100%;
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--blur-amount));
+    -webkit-backdrop-filter: blur(var(--blur-amount));
+    border-left: 1px solid var(--glass-border); /* Border on the left side */
+    box-shadow: -8px 0 32px 0 var(--glass-shadow);
+    z-index: 99; /* Below the toggle button, above player */
+    transition: right 0.4s ease-in-out; /* Smooth slide transition */
     padding: 20px;
     box-sizing: border-box;
-    transition: background-image 0.5s ease-in-out;
+    display: flex;
+    flex-direction: column;
+    color: var(--player-text-color); /* Use variable for sidebar text */
 }
 
-.player-container {
+.sidebar-menu.active {
+    right: 0; /* Slide in */
+}
+
+.sidebar-menu h2 {
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 1.8rem;
+    font-weight: 600;
+    text-shadow: 0 2px 5px var(--glass-shadow);
+}
+
+.sidebar-menu .close-btn { /* Note: This specific close-btn is removed from HTML, but keeping style for robustness */
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    background: none;
+    border: none;
+    font-size: 2.5rem;
+    color: var(--player-text-color); /* Use variable */
+    cursor: pointer;
+    line-height: 1;
+    padding: 5px;
+    transition: color 0.2s ease;
+}
+
+.sidebar-menu .close-btn:hover {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.menu-section {
+    margin-bottom: 30px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1); /* Slightly darker glass background for sections */
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.menu-section h3 {
+    margin-top: 0;
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    color: var(--player-text-color); /* Use variable */
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.menu-section p {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    opacity: var(--player-subtext-opacity); /* Use variable */
+}
+
+.menu-section input[type="file"],
+.menu-section input[type="text"] {
+    width: calc(100% - 20px);
+    padding: 10px;
+    margin-bottom: 15px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    color: var(--player-text-color); /* Use variable for input text */
+    font-size: 0.9rem;
+    outline: none;
+    box-sizing: border-box;
+}
+
+/* Updated: Placeholder text color */
+.menu-section input[type="text"]::placeholder {
+    color: var(--input-placeholder-color); /* Use the new variable */
+}
+
+.menu-section input[type="file"] {
+    color: var(--player-text-color); /* Use variable for file input text */
+}
+
+.menu-section input[type="file"]::-webkit-file-upload-button {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--player-text-color); /* Use variable */
+    border: none;
+    border-radius: 5px;
+    padding: 8px 12px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: background 0.2s ease;
+}
+
+.menu-section input[type="file"]::-webkit-file-upload-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.menu-section .apply-btn {
     width: 100%;
-    max-width: 480px;
-    /* Added for blur effect */
-    backdrop-filter: blur(0px); /* Initial state, no blur */
-    transition: backdrop-filter 0.5s ease-in-out;
+    padding: 10px 15px;
+    background-color: rgba(255, 255, 255, 0.2); /* Glassy button */
+    color: var(--player-text-color); /* Use variable */
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    margin-top: 10px;
 }
 
-body.has-bg-image .player-container {
-    backdrop-filter: blur(8px); /* Apply blur when background image is present */
+.menu-section .apply-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* Custom styling for range input (volume) */
-input[type="range"] {
+/* --- The Main Player Container (Glassmorphism) --- */
+.player-container {
+    position: relative;
+    z-index: 2; /* In front of the visualizer */
+    width: 90%;
+    max-width: 380px;
+    padding: 30px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 25px;
+    text-align: center;
+    
+    /* --- The styles you requested --- */
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--blur-amount));
+    -webkit-backdrop-filter: blur(var(--blur-amount)); /* For Safari */
+    border-radius: 26px;
+    border: 1px solid var(--glass-border);
+    box-shadow: 0 8px 32px 0 var(--glass-shadow);
+    color: var(--player-text-color); /* Use variable for player text */
+}
+
+.station-info h1 {
+    color: var(--player-text-color); /* Use variable for h1 */
+}
+
+.station-info p {
+    opacity: var(--player-subtext-opacity); /* Use variable for opacity */
+}
+
+/* --- Player Content Styling --- */
+.station-logo {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--station-logo-border); /* Use variable for border color */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    cursor: pointer; /* Indicate it's interactive */
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* Smooth transition for scale and shadow */
+}
+
+.station-logo:hover {
+    transform: scale(1.1); /* Scales up on hover */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3); /* Slightly larger shadow on hover */
+}
+
+/* --- Player Controls --- */
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+}
+
+#playPauseBtn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    background-color: var(--player-button-bg); /* Use variable */
+    color: var(--player-button-text); /* Use variable */
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease-in-out;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+#playPauseBtn:hover {
+    transform: scale(1.1);
+    background-color: var(--player-button-bg); /* Maintain color on hover */
+    filter: brightness(0.9); /* Slightly darken on hover */
+}
+
+.fa-play {
+     padding-left: 4px; /* Minor visual adjustment for the play icon */
+}
+
+.volume-control {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Make volume icons clickable and styled */
+.volume-control i {
+    font-size: 20px; /* Adjust size if needed */
+    cursor: pointer; /* Indicate clickability */
+    transition: color 0.2s ease, transform 0.2s ease, filter 0.2s ease, text-shadow 0.2s ease; /* Added text-shadow to transition */
+    padding: 5px; /* Add some padding for easier clicking */
+    border-radius: 50%; /* Make it look like a small button area */
+    color: var(--player-text-color); /* Ensure they use the theme color */
+}
+
+.volume-control i:hover {
+    transform: scale(1.2); /* Increased scale for more noticeable effect */
+    filter: brightness(0.9); /* Same brightness filter as play/pause */
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.7); /* Added subtle glow effect */
+}
+
+/* Style for muted state icon (optional, could just be a color change) */
+.volume-control i.muted-icon {
+    /* You could make it a different color if you want a stronger visual cue */
+    /* opacity: 0.6; */
+    /* color: red; */
+}
+
+
+#volumeSlider {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
     height: 8px;
-    background: #cbd5e1;
+    background: var(--volume-slider-track); /* Use variable */
     border-radius: 5px;
     outline: none;
-    opacity: 0.9;
-    transition: opacity .2s;
+    cursor: pointer;
 }
 
-input[type="range"]:hover {
-    opacity: 1;
-}
-
-input[type="range"]::-webkit-slider-thumb {
+#volumeSlider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 20px;
     height: 20px;
-    background: var(--primary-indigo-600);
-    border: 2px solid #fff;
+    background: var(--volume-slider-thumb); /* Use variable */
     border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-input[type="range"]::-moz-range-thumb {
+#volumeSlider::-moz-range-thumb {
     width: 20px;
     height: 20px;
-    background: var(--primary-indigo-600);
-    border: 2px solid #fff;
+    background: var(--volume-slider-thumb); /* Use variable */
     border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-.progress-bar {
-    position: relative;
-    height: 6px;
-    background-color: #e2e8f0;
-    border-radius: 9999px;
-    overflow: hidden;
-}
-
-.progress-fill {
-    height: 100%;
-    width: 0%;
-    background-color: var(--primary-indigo-500);
-    border-radius: 9999px;
-    transition: width 0.5s ease-out;
-}
-
-.hamburger-icon {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    width: 30px;
-    height: 24px;
-    cursor: pointer;
-    position: relative;
-    z-index: 1000;
-}
-
-.hamburger-icon span {
-    display: block;
-    width: 100%;
-    height: 3px;
-    background-color: var(--primary-indigo-600);
-    border-radius: 5px;
-    transition: all 0.3s ease;
-}
-
-.hamburger-icon.active span:nth-child(1) {
-    transform: translateY(10.5px) rotate(45deg);
-}
-
-.hamburger-icon.active span:nth-child(2) {
-    opacity: 0;
-}
-
-.hamburger-icon.active span:nth-child(3) {
-    transform: translateY(-10.5px) rotate(-45deg);
-}
-
-.side-menu {
-    position: fixed;
-    top: 0;
-    right: 0;
-    height: 100vh;
-    width: 300px;
-    background-color: white;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.2);
-    transform: translateX(100%);
-    transition: transform 0.3s ease-in-out;
-    z-index: 999;
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    border-left: 1px solid #e2e8f0;
-}
-
-.side-menu.open {
-    transform: translateX(0);
-}
-
-.overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.4);
-    z-index: 998;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease-in-out;
-}
-
-.overlay.active {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-/* Unified Message Box Styling */
-.message-box {
-    font-size: 0.875rem; /* text-sm */
-    padding: 0.75rem; /* p-3 */
-    border-radius: 0.5rem; /* rounded-lg */
-    text-align: center;
-    margin-top: 0.5rem;
-    display: none; /* Hidden by default */
-}
-
-.message-box.error {
-    color: var(--secondary-red-600);
-    background-color: #fee2e2; /* red-100 */
-    border: 1px solid #fca5a5; /* border-red-300 */
-}
-
-.message-box.info {
-    color: var(--primary-indigo-600);
-    background-color: #e0e7ff; /* indigo-100 */
-    border: 1px solid #c7d2fe; /* indigo-300 */
+    border: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
